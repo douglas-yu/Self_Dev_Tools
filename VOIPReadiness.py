@@ -364,7 +364,33 @@ class DashboardTab(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+
+        # ---------- Top panel: Summary table + Pie chart ---------- #
+        top_layout = QHBoxLayout()
+
+        # Summary table
+        summary_group = QGroupBox("Last Test Summary")
+        summary_layout = QVBoxLayout()
+        self.summary_table = QTableWidget(5, 2)
+        self.summary_table.setHorizontalHeaderLabels(["Metric", "Value"])
+        metrics_labels = [
+            "Readiness",
+            "Avg Latency (ms)",
+            "Jitter (ms)",
+            "Loss (%)",
+            "MOS",
+        ]
+        for i, label in enumerate(metrics_labels):
+            self.summary_table.setItem(i, 0, QTableWidgetItem(label))
+            self.summary_table.setItem(i, 1, QTableWidgetItem("-"))
+
+        self.summary_table.horizontalHeader().setStretchLastSection(True)
+        self.summary_table.verticalHeader().setVisible(False)
+        self.summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        summary_layout.addWidget(self.summary_table)
+        summary_layout.setContentsMargins(20, 30, 20, 20)
+        summary_group.setLayout(summary_layout)
 
         # Pie chart
         pie_group = QGroupBox("Readiness Breakdown")
@@ -376,9 +402,15 @@ class DashboardTab(QWidget):
         self.ax.set_facecolor('#2b3038')
         self._init_pie()
         pie_layout.addWidget(self.canvas)
+        pie_layout.setContentsMargins(20, 30, 20, 20)
+
         pie_group.setLayout(pie_layout)
 
-        # History records grid (all probes)
+        # Put summary and pie side by side
+        top_layout.addWidget(summary_group, 1)
+        top_layout.addWidget(pie_group, 1)
+
+        # ---------- Bottom panel: History records grid (all probes) ---------- #
         history_group = QGroupBox("History (All Probes)")
         history_layout = QVBoxLayout()
         self.table = QTableWidget(0, 11)
@@ -405,12 +437,14 @@ class DashboardTab(QWidget):
         btn_layout.addWidget(self.btn_export)
 
         history_layout.addWidget(self.table)
+        history_layout.setContentsMargins(20, 30, 20, 20)
         history_layout.addLayout(btn_layout)
         history_group.setLayout(history_layout)
 
-        layout.addWidget(pie_group)
-        layout.addWidget(history_group)
-        self.setLayout(layout)
+        # ---------- Assemble main layout ---------- #
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(history_group)
+        self.setLayout(main_layout)
 
     def _init_pie(self):
         self.ax.clear()
@@ -431,18 +465,33 @@ class DashboardTab(QWidget):
             self.table.setItem(row, col, QTableWidgetItem(val))
 
     def update_pie(self, metrics: VoipMetrics, thresholds: dict):
-        pass_count = 0
-        if metrics.avg_latency_ms <= thresholds["latency_ms"]:
-            pass_count += 1
-        if metrics.jitter_ms <= thresholds["jitter_ms"]:
-            pass_count += 1
-        if metrics.packet_loss_pct <= thresholds["loss_pct"]:
-            pass_count += 1
-        if metrics.mos >= thresholds["mos_min"]:
-            pass_count += 1
+        # Calculate pass/fail and readiness
+        ok_latency = metrics.avg_latency_ms <= thresholds["latency_ms"]
+        ok_jitter = metrics.jitter_ms <= thresholds["jitter_ms"]
+        ok_loss = metrics.packet_loss_pct <= thresholds["loss_pct"]
+        ok_mos = metrics.mos >= thresholds["mos_min"]
 
+        pass_count = sum([ok_latency, ok_jitter, ok_loss, ok_mos])
         fail_count = 4 - pass_count
+        readiness = "READY" if all([ok_latency, ok_jitter, ok_loss, ok_mos]) else "NOT READY"
 
+        # ---- Update summary table ----
+        if self.summary_table is not None:
+            self.summary_table.setItem(0, 1, QTableWidgetItem(readiness))
+            self.summary_table.setItem(
+                1, 1, QTableWidgetItem(f"{metrics.avg_latency_ms:.2f}")
+            )
+            self.summary_table.setItem(
+                2, 1, QTableWidgetItem(f"{metrics.jitter_ms:.2f}")
+            )
+            self.summary_table.setItem(
+                3, 1, QTableWidgetItem(f"{metrics.packet_loss_pct:.2f}")
+            )
+            self.summary_table.setItem(
+                4, 1, QTableWidgetItem(f"{metrics.mos:.2f}")
+            )
+
+        # ---- Update pie chart ----
         self.ax.clear()
         self.ax.set_facecolor('#2b3038')
 
@@ -485,7 +534,6 @@ class DashboardTab(QWidget):
                     item = self.table.item(row, col)
                     values.append(item.text() if item else "")
                 writer.writerow(values)
-
 # ----------------------------- Active Test ----------------------------- #
 
 class ActiveTestTab(QWidget):
@@ -504,8 +552,9 @@ class ActiveTestTab(QWidget):
         # --- Test Configuration ---
         cfg_group = QGroupBox("Test Configuration")
         cfg_layout = QFormLayout()
+        cfg_layout.setContentsMargins(20, 30, 20, 20)
 
-        self.txt_target = QLineEdit("8.8.8.8")
+        self.txt_target = QLineEdit("127.0.0.1")
         self.spin_duration = QSpinBox()
         self.spin_duration.setRange(5, 3600)
         self.spin_duration.setValue(30)
@@ -532,7 +581,7 @@ class ActiveTestTab(QWidget):
         self.combo_dscp.addItem("CS3 (24)", 24)
 
         self.chk_icmp = QCheckBox("Use ICMP ping instead of RTP (demo mode)")
-        self.chk_icmp.setChecked(True)
+        self.chk_icmp.setChecked(False)
 
         cfg_layout.addRow("Target Host/IP:", self.txt_target)
         cfg_layout.addRow("Duration (sec):", self.spin_duration)
@@ -548,6 +597,7 @@ class ActiveTestTab(QWidget):
         # --- Live Metrics + Graph ---
         live_group = QGroupBox("Live Metrics")
         live_layout = QGridLayout()
+        live_layout.setContentsMargins(20, 30, 20, 20)
 
         self.lbl_latency = QLabel("Avg Latency: - ms")
         self.lbl_jitter = QLabel("Jitter: - ms")
