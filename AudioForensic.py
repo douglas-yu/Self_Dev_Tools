@@ -109,7 +109,7 @@ class ForensicApp(QMainWindow):
         self.tabs.addTab(self.report_view, "Forensic Report")
 
         main_layout.addLayout(left_panel, 1)
-        main_layout.addLayout(self.tabs, 4)
+        main_layout.addWidget(self.tabs, 4)
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)
