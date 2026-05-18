@@ -1,0 +1,1349 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PowerShell GUI IDE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#1e1e1e;--panel:#252526;--toolbar:#2d2d30;--border:#3e3e42;
+  --text:#d4d4d4;--dim:#9d9d9d;--accent:#0078d4;--accentH:#106ebe;
+  --sel:#094771;--canvas:#f0f0f0;--green:#4ec9b0;--yellow:#dcdcaa;
+  --blue:#9cdcfe;--orange:#ce9178;--purple:#c586c0;--red:#f48771
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;user-select:none}
+
+/* ── MENU BAR ── */
+.mbar{background:var(--toolbar);border-bottom:1px solid var(--border);display:flex;align-items:center;height:26px;padding:0 6px;flex-shrink:0;position:relative;z-index:200}
+.mi{padding:3px 9px;cursor:pointer;border-radius:2px;font-size:14px;position:relative}
+.mi:hover,.mi.open{background:var(--border)}
+.drop{position:absolute;top:100%;left:0;background:#2d2d30;border:1px solid var(--border);min-width:190px;z-index:300;display:none;box-shadow:4px 4px 12px rgba(0,0,0,.6)}
+.mi.open .drop{display:block}
+.di{padding:5px 18px 5px 22px;cursor:pointer;display:flex;justify-content:space-between;gap:16px;font-size:14px}
+.di:hover{background:var(--accent)}
+.di .sc{color:var(--dim);font-size:14px}
+.dsep{height:1px;background:var(--border);margin:3px 0}
+
+/* ── TOOLBAR ── */
+.tbar{background:#333335;border-bottom:1px solid var(--border);display:flex;align-items:center;height:30px;padding:0 6px;gap:2px;flex-shrink:0}
+.tbtn{padding:3px 9px;background:transparent;border:1px solid transparent;border-radius:2px;color:var(--text);cursor:pointer;font-size:14px;display:flex;align-items:center;gap:4px;font-family:inherit}
+.tbtn:hover{background:var(--border);border-color:#555}
+.tbtn.prim{background:var(--accent);border-color:var(--accent)}
+.tbtn.prim:hover{background:var(--accentH)}
+.tsep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.tlabel{color:var(--dim);font-size:14px;margin:0 3px}
+.tinput{background:#2d2d30;border:1px solid #555;color:var(--text);padding:2px 5px;font-size:14px;outline:none;font-family:inherit}
+.tinput:focus{border-color:var(--accent)}
+
+/* ── MAIN LAYOUT ── */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* ── TOOLBOX ── */
+.toolbox{width:160px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.ph{background:var(--toolbar);padding:4px 8px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);border-bottom:1px solid var(--border);flex-shrink:0}
+.tbox-scroll{flex:1;overflow-y:auto;overflow-x:hidden}
+.tbox-scroll::-webkit-scrollbar{width:5px}
+.tbox-scroll::-webkit-scrollbar-thumb{background:#555;border-radius:3px}
+.tcat-hdr{padding:4px 8px;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px;background:#2e2e30;border-bottom:1px solid var(--border)}
+.tcat-hdr:hover{background:var(--border)}
+.tcat-arr{font-size:14px;transition:transform .15s}
+.tcat-hdr.coll .tcat-arr{transform:rotate(-90deg)}
+.titem{padding:4px 8px 4px 20px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:14px;transition:background .1s}
+.titem:hover{background:var(--sel)}
+.titem:active{cursor:grabbing}
+.tico{width:15px;text-align:center;font-size:14px}
+
+/* ── CENTER ── */
+.center{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+
+/* ── TAB BAR ── */
+.tabbar{display:flex;background:var(--toolbar);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:5px 16px;cursor:pointer;font-size:14px;color:var(--dim);border-right:1px solid var(--border);border-bottom:2px solid transparent}
+.tab.act{color:var(--text);background:var(--bg);border-bottom-color:var(--accent)}
+.tab:hover:not(.act){background:var(--border)}
+
+/* ── DESIGN VIEW ── */
+.design-view{flex:1;overflow:auto;background:#404040;display:flex;align-items:flex-start;justify-content:flex-start;padding:24px;position:relative}
+.design-view::-webkit-scrollbar{width:10px;height:10px}
+.design-view::-webkit-scrollbar-track{background:#3a3a3a}
+.design-view::-webkit-scrollbar-thumb{background:#666;border-radius:5px}
+
+/* ── FORM CANVAS ── */
+.form-canvas{position:relative;flex-shrink:0;background:#ececec;
+  background-image:linear-gradient(rgba(0,0,0,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.07) 1px,transparent 1px);
+  background-size:8px 8px;box-shadow:6px 6px 24px rgba(0,0,0,.7);display:flex;flex-direction:column}
+.form-titlebar{background:linear-gradient(135deg,#005a9e,#0078d4);color:#fff;font-size:14px;padding:3px 8px;display:flex;align-items:center;justify-content:space-between;height:22px;flex-shrink:0}
+.ftb-btns{display:flex;gap:2px}
+.ftb-btn{width:14px;height:14px;background:rgba(255,255,255,.25);border-radius:1px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
+.form-body{flex:1;position:relative;overflow:hidden}
+
+/* ── CANVAS WIDGET ── */
+.cw{position:absolute;box-sizing:border-box}
+.cw.sel{outline:2px solid var(--accent)!important;outline-offset:0;z-index:50}
+.cw-inner{position:absolute;inset:0;pointer-events:none;overflow:hidden;display:flex}
+.wlbl{position:absolute;top:-16px;left:0;background:var(--accent);color:#fff;font-size:14px;padding:0 4px;border-radius:2px;white-space:nowrap;display:none;z-index:10}
+.cw.sel .wlbl{display:block}
+
+/* ── RESIZE HANDLES ── */
+.rh{position:absolute;width:7px;height:7px;background:#fff;border:1px solid var(--accent);border-radius:1px;z-index:100;display:none}
+.cw.sel .rh{display:block}
+.rh[d="nw"]{top:-4px;left:-4px;cursor:nw-resize}
+.rh[d="n"]{top:-4px;left:calc(50% - 4px);cursor:n-resize}
+.rh[d="ne"]{top:-4px;right:-4px;cursor:ne-resize}
+.rh[d="w"]{top:calc(50% - 4px);left:-4px;cursor:w-resize}
+.rh[d="e"]{top:calc(50% - 4px);right:-4px;cursor:e-resize}
+.rh[d="sw"]{bottom:-4px;left:-4px;cursor:sw-resize}
+.rh[d="s"]{bottom:-4px;left:calc(50% - 4px);cursor:s-resize}
+.rh[d="se"]{bottom:-4px;right:-4px;cursor:se-resize}
+
+/* ── WIDGET SKINS ── */
+.w-btn{background:#e1e1e1;border:1px solid #adadad;color:#000;font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:2px}
+.w-lbl{color:#000;font-size:13px;display:flex;align-items:center;background:transparent}
+.w-txt{background:#fff;border:1px solid #abadb3;color:#000;font-size:13px;padding:2px 3px;display:flex;align-items:center}
+.w-rtxt{background:#fff;border:1px solid #abadb3;color:#000;font-size:13px;padding:3px;overflow:hidden}
+.w-chk{display:flex;align-items:center;gap:4px;font: size 13px;px;color:#000;background:transparent}
+.w-rdo{display:flex;align-items:center;gap:4px;font-size:13px;color:#000;background:transparent}
+.w-cmb{background:#fff;border:1px solid #abadb3;color:#000;font-size:13px;display:flex;align-items:center;justify-content:space-between;padding:0 4px}
+.w-lst{background:#fff;border:1px solid #abadb3;color:#000;font-size:13px;display:flex;flex-direction:column;padding:2px;overflow:hidden}
+.w-lst-row{padding:1px 4px}
+.w-num{background:#fff;border:1px solid #abadb3;display:flex;overflow:hidden}
+.w-num-val{flex:1;display:flex;align-items:center;padding:0 4px;font-size:13px;color:#000}
+.w-num-btns{display:flex;flex-direction:column;width:16px;border-left:1px solid #abadb3}
+.w-num-btn{flex:1;display:flex;align-items:center;justify-content:center;font-size:12px;background:#f0f0f0;color:#000}
+.w-num-btn:not(:last-child){border-bottom:1px solid #abadb3}
+.w-grp{border:1px solid #abadb3;background:rgba(240,240,240,.5);position:relative}
+.w-grp-lbl{position:absolute;top:-8px;left:8px;background:#ececec;padding:0 4px;font-size:12px;color:#000}
+.w-pnl{background:#f0f0f0;border:1px solid #abadb3}
+.w-tab{background:#f0f0f0;border:1px solid #abadb3;display:flex;flex-direction:column}
+.w-tab-hdr{display:flex;border-bottom:1px solid #abadb3}
+.w-tab-t{padding:3px 10px;border:1px solid #abadb3;border-bottom:none;background:#f0f0f0;font-size:13px;margin-right:2px;border-radius:2px 2px 0 0}
+.w-tab-t.a{background:#fff}
+.w-pic{background:#fff;border:1px solid #abadb3;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px}
+.w-prg{background:#e6e6e6;border:1px inset #abadb3;overflow:hidden}
+.w-trk{display:flex;align-items:center;padding:0 4px;background:transparent}
+.w-trk-t{flex:1;height:3px;background:#abadb3;border-radius:2px;position:relative}
+.w-trk-th{position:absolute;width:10px;height:20px;background:var(--accent);border-radius:2px;top:-8px;left:30%}
+.w-dgv{background:#fff;border:1px solid #abadb3;overflow:hidden;display:flex;flex-direction:column}
+.w-dgv-hdr{background:#f5f5f5;border-bottom:1px solid #abadb3;display:flex;flex-shrink:0}
+.w-dgv-col{padding:2px 6px;border-right:1px solid #abadb3;font-size:13px;font-weight:700;color:#000;flex:1}
+.w-dgv-row{display:flex;border-bottom:1px solid #e0e0e0}
+.w-dgv-cell{padding:2px 6px;border-right:1px solid #e0e0e0;font-size:13px;color:#000;flex:1}
+.w-tv{background:#fff;border:1px solid #abadb3;padding:3px;font-size:13px;color:#000;overflow:hidden}
+.w-lv{background:#fff;border:1px solid #abadb3;overflow:hidden;display:flex;flex-direction:column}
+.w-lv-hdr{background:#f5f5f5;border-bottom:1px solid #ccc;display:flex}
+.w-lv-hc{flex:1;padding:2px 6px;font-size:10px;font-weight:700;color:#000;border-right:1px solid #ccc}
+.w-mnu{background:#f0f0f0;border-bottom:1px solid #abadb3;display:flex;align-items:center;font-size:13px;color:#000;padding:2px 4px}
+.w-mnu-it{padding:2px 8px;cursor:pointer}
+.w-mnu-it:hover{background:#d5e8f7}
+.w-sts{background:#007acc;color:#fff;font-size:13px;padding:2px 6px;display:flex;align-items:center}
+.w-dtp{background:#fff;border:1px solid #abadb3;display:flex;align-items:center;padding:0 4px;font-size:13px;color:#000}
+
+/* ── CODE EDITOR ── */
+.code-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.code-bar{background:#2d2d30;padding:4px 10px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.code-area{flex:1;display:flex;overflow:hidden}
+.line-nums{background:#1e1e1e;color:#4e4e4e;padding:8px 0;width:46px;flex-shrink:0;font:12px/1.5 'Consolas','SF Mono',monospace;text-align:right;padding-right:10px;border-right:1px solid var(--border);overflow:hidden;user-select:none}
+.code-ta{flex:1;background:#1e1e1e;color:#d4d4d4;border:none;outline:none;font:12px/1.5 'Consolas','SF Mono',monospace;padding:8px 12px;resize:none;tab-size:4;white-space:pre;overflow-wrap:normal;overflow:auto;-webkit-font-smoothing:antialiased}
+.code-ta::-webkit-scrollbar{width:8px;height:8px}
+.code-ta::-webkit-scrollbar-thumb{background:#555}
+
+/* ── OUTPUT ── */
+.output{flex:1;background:#1e1e1e;padding:8px 12px;font:12px/1.5 'Consolas','SF Mono',monospace;color:#d4d4d4;overflow-y:auto}
+.output::-webkit-scrollbar{width:8px}
+.output::-webkit-scrollbar-thumb{background:#555}
+.ol{margin-bottom:2px}
+.os{color:#4fc1ff}.oe{color:#f48771}.oi{color:#9cdcfe}.ow{color:#dcdcaa}
+
+/* ── PROPERTIES PANEL ── */
+.props{width:260px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.pname-bar{background:#333337;padding:3px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:5px;flex-shrink:0}
+.pname-val{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:1px 4px;font-size:14px;flex:1;outline:none;font-family:inherit}
+.ptabs{display:flex;background:#2e2e30;border-bottom:1px solid var(--border);flex-shrink:0}
+.ptab{padding:4px 10px;font-size:11px;cursor:pointer;color:var(--dim)}
+.ptab.act{color:var(--text);border-bottom:2px solid var(--accent)}
+.ptab:hover:not(.act){background:var(--border)}
+.pscroll{flex:1;overflow-y:auto;overflow-x:hidden}
+.pscroll::-webkit-scrollbar{width:5px}
+.pscroll::-webkit-scrollbar-thumb{background:#555;border-radius:3px}
+.pgh{background:#333337;padding:3px 7px;font-size:14px;font-weight:700;color:#bbb;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:4px}
+.pr{display:flex;border-bottom:1px solid var(--border);min-height:21px}
+.prl{width:94px;flex-shrink:0;padding:2px 6px;font-size:14px;color:var(--text);border-right:1px solid var(--border);display:flex;align-items:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prv{flex:1;padding:1px 3px;display:flex;align-items:center}
+.pinput{width:100%;background:var(--bg);border:none;color:var(--text);font-size:14px;outline:none;padding:1px 2px;font-family:inherit}
+.pinput:focus{background:var(--sel)}
+.pchk{accent-color:var(--accent)}
+.psel{width:100%;background:var(--bg);border:none;color:var(--text);font-size:14px;outline:none;font-family:inherit}
+.psel option{background:var(--panel)}
+.er{display:flex;border-bottom:1px solid var(--border);min-height:21px}
+.erl{width:94px;flex-shrink:0;padding:2px 6px;font-size:14px;color:#ffd700;border-right:1px solid var(--border);display:flex;align-items:center}
+.erv{flex:1;padding:1px 3px}
+.einput{width:100%;background:transparent;border:none;color:#9cdcfe;font-size:13px;outline:none;font-style:italic;cursor:pointer;font-family:inherit}
+.einput:focus{background:var(--sel)}
+
+/* ── CONTEXT MENU ── */
+.ctx{position:fixed;background:#2d2d30;border:1px solid var(--border);box-shadow:3px 4px 14px rgba(0,0,0,.6);z-index:9999;min-width:164px;display:none}
+.ci{padding:5px 16px;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;gap:12px}
+.ci:hover{background:var(--accent)}
+.ci.danger{color:var(--red)}
+.ci.danger:hover{background:var(--red);color:#fff}
+.csep{height:1px;background:var(--border);margin:3px 0}
+
+/* ── DIALOG ── */
+.dlg-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9998;display:none;align-items:center;justify-content:center}
+.dlg-ov.show{display:flex}
+.dlg{background:#2d2d30;border:1px solid var(--border);border-radius:3px;padding:20px;max-width:560px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,.7)}
+.dlg-ttl{font-size:14px;font-weight:600;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.dlg-body{font-size:12px;line-height:1.7;color:var(--text)}
+.dlg-code{background:#1e1e1e;border:1px solid var(--border);padding:8px 12px;font:12px 'Consolas',monospace;color:#9cdcfe;margin:6px 0;border-radius:2px;white-space:pre-wrap;word-break:break-all}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.dlg-btn{padding:5px 16px;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:12px;color:var(--text);background:#3c3c3c;font-family:inherit}
+.dlg-btn:hover{background:#555}
+.dlg-btn.prim{background:var(--accent);border-color:var(--accent);color:#fff}
+.dlg-btn.prim:hover{background:var(--accentH)}
+
+/* ── DRAG GHOST ── */
+.ghost{position:fixed;pointer-events:none;opacity:.8;z-index:9997;padding:3px 8px;background:var(--accent);color:#fff;border-radius:2px;font-size:12px;display:none}
+
+/* ── STATUS BAR ── */
+.sbar{height:22px;background:var(--accent);display:flex;align-items:center;padding:0 10px;gap:16px;font-size:13px;color:#fff;flex-shrink:0}
+.si{display:flex;align-items:center;gap:4px}
+.sbar-right{margin-left:auto;display:flex;gap:16px}
+
+@media print{
+  .mbar,.tbar,.toolbox,.props,.sbar{display:none!important}
+  .center{width:100%}
+  .design-view{padding:0;background:#fff}
+  .form-canvas{box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<!-- Context Menu -->
+<div class="ctx" id="ctx">
+  <div class="ci" onclick="ca('cut')">Cut <span class="sc">Ctrl+X</span></div>
+  <div class="ci" onclick="ca('copy')">Copy <span class="sc">Ctrl+C</span></div>
+  <div class="ci" onclick="ca('paste')">Paste <span class="sc">Ctrl+V</span></div>
+  <div class="csep"></div>
+  <div class="ci" onclick="ca('front')">Bring to Front</div>
+  <div class="ci" onclick="ca('back')">Send to Back</div>
+  <div class="csep"></div>
+  <div class="ci" onclick="ca('code')">View Event Code <span class="sc">F7</span></div>
+  <div class="csep"></div>
+  <div class="ci danger" onclick="ca('del')">Delete <span class="sc">Del</span></div>
+</div>
+
+<!-- Dialog -->
+<div class="dlg-ov" id="dlgOv">
+  <div class="dlg">
+    <div class="dlg-ttl" id="dlgTtl"></div>
+    <div class="dlg-body" id="dlgBody"></div>
+    <div class="dlg-acts" id="dlgActs"></div>
+  </div>
+</div>
+
+<div class="ghost" id="ghost"></div>
+
+<!-- MENU BAR -->
+<div class="mbar" id="mbar">
+  <div class="mi" onclick="tmenu(this,'mFile')">File
+    <div class="drop" id="mFile">
+      <div class="di" onclick="ma('new')">New Project <span class="sc">Ctrl+N</span></div>
+      <div class="dsep"></div>
+      <div class="di" onclick="ma('ps1')">Export as .PS1 <span class="sc">Ctrl+S</span></div>
+      <div class="di" onclick="ma('exe')">Build .EXE <span class="sc">Ctrl+Shift+B</span></div>
+    </div>
+  </div>
+  <div class="mi" onclick="tmenu(this,'mEdit')">Edit
+    <div class="drop" id="mEdit">
+      <div class="di" onclick="doUndo()">Undo <span class="sc">Ctrl+Z</span></div>
+      <div class="di" onclick="doRedo()">Redo <span class="sc">Ctrl+Y</span></div>
+      <div class="dsep"></div>
+      <div class="di" onclick="ca('cut')">Cut <span class="sc">Ctrl+X</span></div>
+      <div class="di" onclick="ca('copy')">Copy <span class="sc">Ctrl+C</span></div>
+      <div class="di" onclick="ca('paste')">Paste <span class="sc">Ctrl+V</span></div>
+      <div class="dsep"></div>
+      <div class="di" onclick="delSel()">Delete Widget <span class="sc">Del</span></div>
+    </div>
+  </div>
+  <div class="mi" onclick="tmenu(this,'mView')">View
+    <div class="drop" id="mView">
+      <div class="di" onclick="switchTab('design')">Designer <span class="sc">Shift+F7</span></div>
+      <div class="di" onclick="switchTab('code')">Code Editor <span class="sc">F7</span></div>
+      <div class="di" onclick="switchTab('output')">Output Console</div>
+      <div class="dsep"></div>
+      <div class="di" onclick="ma('grid')">Toggle Grid Snap</div>
+    </div>
+  </div>
+  <div class="mi" onclick="tmenu(this,'mBuild')">Build
+    <div class="drop" id="mBuild">
+      <div class="di" onclick="genCode();switchTab('code');addOut('Code regenerated','s')">Generate Code <span class="sc">F5</span></div>
+      <div class="di" onclick="ma('ps1')">Export .PS1 <span class="sc">Ctrl+S</span></div>
+      <div class="di" onclick="ma('exe')">Build .EXE <span class="sc">Ctrl+Shift+B</span></div>
+    </div>
+  </div>
+  <div class="mi" onclick="tmenu(this,'mHelp')">Help
+    <div class="drop" id="mHelp">
+      <div class="di" onclick="showAbout()">About PowerShell IDE</div>
+      <div class="di" onclick="showKeys()">Keyboard Shortcuts</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="tbar">
+  <button class="tbtn prim" onclick="ma('ps1')">▶ Export PS1</button>
+  <button class="tbtn" onclick="ma('exe')" style="background:#5c3317;border-color:#7a4520">⚙ Build EXE</button>
+  <div class="tsep"></div>
+  <button class="tbtn" onclick="genCode();switchTab('code')">📄 Code</button>
+  <button class="tbtn" onclick="switchTab('design')">🎨 Design</button>
+  <div class="tsep"></div>
+  <button class="tbtn" onclick="doUndo()" title="Undo Ctrl+Z">↩</button>
+  <button class="tbtn" onclick="doRedo()" title="Redo Ctrl+Y">↪</button>
+  <div class="tsep"></div>
+  <button class="tbtn" onclick="delSel()" title="Delete">🗑</button>
+  <button class="tbtn" onclick="clearAll()" title="Clear Canvas">✕ Clear</button>
+  <div class="tsep"></div>
+  <span class="tlabel">Form:</span>
+  <input class="tinput" id="fTitle" value="Form1" onchange="updateFTitle(this.value)" style="width:90px">
+  <span class="tlabel">Size:</span>
+  <input class="tinput" id="fW" value="800" onchange="updateFSize()" style="width:44px">
+  <span style="color:var(--dim)"> × </span>
+  <input class="tinput" id="fH" value="500" onchange="updateFSize()" style="width:44px">
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- TOOLBOX -->
+  <div class="toolbox">
+    <div class="ph">Toolbox</div>
+    <div class="tbox-scroll" id="tboxContent"></div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="tabbar">
+      <div class="tab act" id="tab-design" onclick="switchTab('design')">🎨 Designer</div>
+      <div class="tab" id="tab-code" onclick="switchTab('code')">📝 Code</div>
+      <div class="tab" id="tab-output" onclick="switchTab('output')">📋 Output</div>
+    </div>
+
+    <!-- DESIGN VIEW -->
+    <div class="design-view" id="vDesign"
+      ondragover="onDragOver(event)" ondrop="onDrop(event)"
+      onclick="onCanvasClick(event)" onmousemove="onMouseMove(event)">
+      <div id="formCanvas" class="form-canvas" oncontextmenu="onFCtx(event)">
+        <div class="form-titlebar" id="fTitlebar">
+          <span id="fTitleTxt">Form1</span>
+          <div class="ftb-btns">
+            <div class="ftb-btn">─</div>
+            <div class="ftb-btn">□</div>
+            <div class="ftb-btn" style="background:rgba(255,0,0,.4)">✕</div>
+          </div>
+        </div>
+        <div id="formBody" class="form-body" onmousedown="onBodyDown(event)"></div>
+      </div>
+    </div>
+
+    <!-- CODE VIEW -->
+    <div class="code-wrap" id="vCode" style="display:none">
+      <div class="code-bar">
+        <span>📄 <span id="codeFileName">Form1.ps1</span> — PowerShell WinForms</span>
+        <div style="display:flex;gap:6px">
+          <button class="tbtn" onclick="genCode();addOut('Code regenerated','s')" style="padding:2px 8px">↻ Refresh</button>
+          <button class="tbtn prim" onclick="ma('ps1')" style="padding:2px 8px">⬇ Export</button>
+        </div>
+      </div>
+      <div class="code-area">
+        <div class="line-nums" id="lineNums">1</div>
+        <textarea class="code-ta" id="codeTA" spellcheck="false"
+          oninput="syncLines()" onscroll="syncLines()"></textarea>
+      </div>
+    </div>
+
+    <!-- OUTPUT VIEW -->
+    <div class="output" id="vOutput" style="display:none">
+      <div class="ol oi">═══ PowerShell GUI IDE — Output Console ═══</div>
+      <div id="outLines"></div>
+    </div>
+  </div>
+
+  <!-- PROPERTIES -->
+  <div class="props">
+    <div class="ph">Properties</div>
+    <div class="pname-bar">
+      <span style="color:var(--dim);font-size:13px">Widget:</span>
+      <input class="pname-val" id="pNameIn" value="(Form)" readonly>
+    </div>
+    <div class="ptabs">
+      <div class="ptab act" id="ptab-p" onclick="switchPTab('p')">⚙ Properties</div>
+      <div class="ptab" id="ptab-e" onclick="switchPTab('e')">⚡ Events</div>
+    </div>
+    <div class="pscroll" id="pContent"></div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="sbar">
+  <div class="si">🟢 Ready</div>
+  <div class="si" id="stWidget">No selection</div>
+  <div class="si" id="stCoords">X:0 Y:0</div>
+  <div class="si" id="stCount">Widgets: 0</div>
+  <div class="sbar-right">
+    <div class="si" id="stForm">Form: 800×500</div>
+    <div class="si">PowerShell GUI IDE v1.0</div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const S = {
+  widgets:[],
+  sel:null,
+  clip:null,
+  form:{name:'Form1',text:'Form1',width:800,height:500,backColor:'Control',startPos:'CenterScreen'},
+  tab:'design',
+  ptab:'p',
+  grid:true,
+  gsize:8,
+  nid:{},
+  drag:null,
+  moving:null,
+  resizing:null,
+  undo:[],
+  redo:[]
+};
+
+// Prop change handlers registry
+const PH = {};
+function rh(id,fn){PH[id]=fn;return id}
+function opc(id,val){if(PH[id])PH[id](val)}
+function opcc(id,checked){if(PH[id])PH[id](checked)}
+
+// ════════════════════════════════════════
+// WIDGET DEFINITIONS
+// ════════════════════════════════════════
+const WD = {
+  Button:{ico:'🔲',cat:'Common',dw:85,dh:27,text:'button',evs:['Click','MouseEnter','MouseLeave','MouseDown','MouseUp','GotFocus','LostFocus'],ps:'System.Windows.Forms.Button'},
+  Label:{ico:'🔤',cat:'Common',dw:60,dh:18,text:'label',evs:['Click','MouseEnter','MouseLeave'],ps:'System.Windows.Forms.Label'},
+  TextBox:{ico:'✏️',cat:'Common',dw:120,dh:23,text:'',evs:['TextChanged','KeyDown','KeyUp','KeyPress','Enter','Leave'],ps:'System.Windows.Forms.TextBox'},
+  RichTextBox:{ico:'📝',cat:'Common',dw:200,dh:100,text:'',evs:['TextChanged','KeyDown','SelectionChanged'],ps:'System.Windows.Forms.RichTextBox'},
+  CheckBox:{ico:'☑',cat:'Common',dw:110,dh:21,text:'checkBox',checked:false,evs:['CheckedChanged','Click'],ps:'System.Windows.Forms.CheckBox'},
+  RadioButton:{ico:'🔘',cat:'Common',dw:110,dh:21,text:'radioButton',checked:false,evs:['CheckedChanged','Click'],ps:'System.Windows.Forms.RadioButton'},
+  ComboBox:{ico:'📋',cat:'Common',dw:140,dh:23,text:'',items:'Item1\nItem2\nItem3',evs:['SelectedIndexChanged','TextChanged','DropDown'],ps:'System.Windows.Forms.ComboBox'},
+  ListBox:{ico:'📃',cat:'Common',dw:140,dh:100,text:'',items:'Item1\nItem2\nItem3',evs:['SelectedIndexChanged','DoubleClick'],ps:'System.Windows.Forms.ListBox'},
+  NumericUpDown:{ico:'🔢',cat:'Common',dw:80,dh:23,text:'0',vmin:0,vmax:100,vval:0,evs:['ValueChanged'],ps:'System.Windows.Forms.NumericUpDown'},
+  GroupBox:{ico:'▭',cat:'Containers',dw:200,dh:120,text:'groupBox',evs:['Click'],ps:'System.Windows.Forms.GroupBox'},
+  Panel:{ico:'⬜',cat:'Containers',dw:200,dh:120,text:'',evs:['Click'],ps:'System.Windows.Forms.Panel'},
+  TabControl:{ico:'📑',cat:'Containers',dw:300,dh:200,text:'tabControl',evs:['SelectedIndexChanged'],ps:'System.Windows.Forms.TabControl'},
+  PictureBox:{ico:'🖼',cat:'Display',dw:100,dh:100,text:'',evs:['Click','DoubleClick'],ps:'System.Windows.Forms.PictureBox'},
+  ProgressBar:{ico:'▰',cat:'Display',dw:200,dh:23,text:'',vmin:0,vmax:100,vval:40,evs:[],ps:'System.Windows.Forms.ProgressBar'},
+  TrackBar:{ico:'🎚',cat:'Display',dw:160,dh:45,text:'',vmin:0,vmax:10,vval:5,evs:['Scroll','ValueChanged'],ps:'System.Windows.Forms.TrackBar'},
+  DataGridView:{ico:'⊞',cat:'Data',dw:300,dh:150,text:'',evs:['CellClick','CellValueChanged','SelectionChanged'],ps:'System.Windows.Forms.DataGridView'},
+  TreeView:{ico:'🌲',cat:'Data',dw:160,dh:200,text:'',evs:['AfterSelect','NodeMouseClick'],ps:'System.Windows.Forms.TreeView'},
+  ListView:{ico:'≡',cat:'Data',dw:220,dh:150,text:'',evs:['SelectedIndexChanged','DoubleClick'],ps:'System.Windows.Forms.ListView'},
+  DateTimePicker:{ico:'📅',cat:'Data',dw:200,dh:23,text:'',evs:['ValueChanged'],ps:'System.Windows.Forms.DateTimePicker'},
+  MenuStrip:{ico:'☰',cat:'Menus',dw:0,dh:24,text:'menuStrip',dx:0,dy:0,evs:['ItemClicked'],ps:'System.Windows.Forms.MenuStrip'},
+  StatusStrip:{ico:'─',cat:'Menus',dw:0,dh:22,text:'Ready',dx:0,dy:0,evs:['ItemClicked'],ps:'System.Windows.Forms.StatusStrip'}
+};
+
+const CATS={};
+Object.entries(WD).forEach(([t,d])=>{if(!CATS[d.cat])CATS[d.cat]=[];CATS[d.cat].push(t)});
+
+// ════════════════════════════════════════
+// TOOLBOX
+// ════════════════════════════════════════
+function buildToolbox(){
+  const c=document.getElementById('tboxContent');
+  c.innerHTML='';
+  Object.entries(CATS).forEach(([cat,types])=>{
+    const div=document.createElement('div');
+    const hdr=document.createElement('div');
+    hdr.className='tcat-hdr';
+    hdr.innerHTML=`<span class="tcat-arr">▼</span> ${cat}`;
+    const items=document.createElement('div');
+    items.id='cat_'+cat;
+    types.forEach(t=>{
+      const d=WD[t];
+      const it=document.createElement('div');
+      it.className='titem';
+      it.draggable=true;
+      it.innerHTML=`<span class="tico">${d.ico}</span>${t}`;
+      it.title=d.ps;
+      it.addEventListener('dragstart',e=>{
+        e.dataTransfer.setData('wt',t);
+        const g=document.getElementById('ghost');
+        g.textContent='+ '+t;g.style.display='block';
+      });
+      it.addEventListener('dragend',()=>{document.getElementById('ghost').style.display='none'});
+      it.addEventListener('dblclick',()=>{
+        const body=document.getElementById('formBody');
+        const dw=d.dw||80,dh=d.dh||25;
+        const x=snap(Math.max(0,(body.clientWidth/2-dw/2)));
+        const y=snap(Math.max(0,(body.clientHeight/2-dh/2)));
+        addWidget(t,x,y);
+      });
+      items.appendChild(it);
+    });
+    hdr.onclick=()=>{hdr.classList.toggle('coll');items.style.display=hdr.classList.contains('coll')?'none':''};
+    div.appendChild(hdr);div.appendChild(items);c.appendChild(div);
+  });
+}
+
+// ════════════════════════════════════════
+// WIDGET MANAGEMENT
+// ════════════════════════════════════════
+function genName(t){
+  const n=(S.nid[t]||1);S.nid[t]=n+1;
+  return t.charAt(0).toLowerCase()+t.slice(1)+n;
+}
+
+function snap(v){
+  if(!S.grid)return Math.max(0,v);
+  return Math.max(0,Math.round(v/S.gsize)*S.gsize);
+}
+
+function addWidget(type,x,y){
+  if(S.tab!=='design')switchTab('design');
+  const d=WD[type];
+  const name=genName(type);
+  const w={
+    id:'w_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
+    type,name,
+    text:d.text!==undefined?d.text:name,
+    x:d.dx!==undefined?d.dx:snap(x),
+    y:d.dy!==undefined?d.dy:snap(y),
+    width:d.dw||80,
+    height:d.dh||25,
+    font:'Microsoft Sans Serif, 8.25',
+    backColor:'Control',foreColor:'ControlText',
+    enabled:true,visible:true,tabIndex:S.widgets.length,
+    eventCode:{}
+  };
+  if(d.items!==undefined)w.items=d.items;
+  if(d.checked!==undefined)w.checked=d.checked;
+  if(d.vmin!==undefined){w.vmin=d.vmin;w.vmax=d.vmax;w.vval=d.vval;}
+  // MenuStrip/StatusStrip fill full width
+  if(type==='MenuStrip'||type==='StatusStrip'){
+    const body=document.getElementById('formBody');
+    w.width=body.clientWidth||S.form.width;
+    if(type==='StatusStrip')w.y=Math.max(0,S.form.height-24);
+  }
+  pushUndo();
+  S.widgets.push(w);
+  renderWidget(w);
+  selectWidget(w.id);
+  updateStatus();
+  return w;
+}
+
+function renderWidget(w){
+  const body=document.getElementById('formBody');
+  let el=document.getElementById(w.id);
+  if(!el){
+    el=document.createElement('div');
+    el.id=w.id;
+    el.className='cw';
+    // Inner content container
+    const inner=document.createElement('div');
+    inner.className='cw-inner';
+    inner.id='ci_'+w.id;
+    el.appendChild(inner);
+    // Label
+    const lbl=document.createElement('div');
+    lbl.className='wlbl';
+    lbl.id='wl_'+w.id;
+    el.appendChild(lbl);
+    // Resize handles
+    ['nw','n','ne','w','e','sw','s','se'].forEach(d=>{
+      const h=document.createElement('div');
+      h.className='rh';h.setAttribute('d',d);
+      h.addEventListener('mousedown',e=>startResize(e,w.id,d));
+      el.appendChild(h);
+    });
+    el.addEventListener('mousedown',e=>startMove(e,w.id));
+    el.addEventListener('dblclick',()=>openEvt(w.id,null));
+    el.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();selectWidget(w.id);showCtx(e.clientX,e.clientY)});
+    body.appendChild(el);
+  }
+  el.style.cssText=`left:${w.x}px;top:${w.y}px;width:${w.width}px;height:${w.height}px;opacity:${w.visible?1:0.35};`;
+  buildInner(w);
+  document.getElementById('wl_'+w.id).textContent=w.name;
+}
+
+function buildInner(w){
+  const inner=document.getElementById('ci_'+w.id);
+  if(!inner)return;
+  inner.innerHTML='';
+  inner.className='cw-inner';
+  let h='';
+  const txt=w.text||w.name||'';
+  switch(w.type){
+    case 'Button':
+      inner.className='cw-inner w-btn';
+      inner.textContent=txt;break;
+    case 'Label':
+      inner.className='cw-inner w-lbl';
+      inner.textContent=txt;break;
+    case 'TextBox':
+      inner.className='cw-inner w-txt';
+      inner.textContent=txt||(w.name+' text...');break;
+    case 'RichTextBox':
+      inner.className='cw-inner w-rtxt';
+      inner.style.display='block';
+      inner.textContent=txt||'RichTextBox';break;
+    case 'CheckBox':
+      inner.className='cw-inner w-chk';
+      inner.style.flexDirection='row';
+      inner.innerHTML=`<span style="font-size:14px">${w.checked?'☑':'☐'}</span><span>${txt}</span>`;break;
+    case 'RadioButton':
+      inner.className='cw-inner w-rdo';
+      inner.style.flexDirection='row';
+      inner.innerHTML=`<span style="font-size:13px">${w.checked?'◉':'○'}</span><span>${txt}</span>`;break;
+    case 'ComboBox':
+      inner.className='cw-inner w-cmb';
+      inner.innerHTML=`<span style="flex:1">${(w.items?w.items.split('\n')[0]:txt)||'ComboBox'}</span><span style="font-size:13px;color:#555">▼</span>`;break;
+    case 'ListBox':
+      inner.className='cw-inner w-lst';
+      inner.style.flexDirection='column';inner.style.alignItems='stretch';
+      if(w.items)w.items.split('\n').slice(0,8).forEach(it=>{const r=document.createElement('div');r.className='w-lst-row';r.textContent=it;inner.appendChild(r)});
+      break;
+    case 'NumericUpDown':
+      inner.className='cw-inner w-num';
+      inner.innerHTML=`<div class="w-num-val">${w.vval!==undefined?w.vval:0}</div><div class="w-num-btns"><div class="w-num-btn">▲</div><div class="w-num-btn">▼</div></div>`;break;
+    case 'GroupBox':
+      inner.className='cw-inner w-grp';
+      inner.style.display='block';
+      inner.innerHTML=`<div class="w-grp-lbl">${txt}</div>`;break;
+    case 'Panel':
+      inner.className='cw-inner w-pnl';break;
+    case 'TabControl':
+      inner.className='cw-inner w-tab';
+      inner.innerHTML=`<div class="w-tab-hdr"><div class="w-tab-t a">Tab1</div><div class="w-tab-t">Tab2</div><div class="w-tab-t">Tab3</div></div>`;break;
+    case 'PictureBox':
+      inner.className='cw-inner w-pic';
+      inner.innerHTML=`<span>🖼 PictureBox</span>`;break;
+    case 'ProgressBar':{
+      const pct=w.vmax>w.vmin?((w.vval-w.vmin)/(w.vmax-w.vmin)*100):40;
+      inner.className='cw-inner w-prg';
+      inner.innerHTML=`<div style="width:${pct}%;height:100%;background:linear-gradient(to right,#06b025,#4caf50)"></div>`;break;}
+    case 'TrackBar':
+      inner.className='cw-inner w-trk';
+      inner.innerHTML=`<div class="w-trk-t"><div class="w-trk-th"></div></div>`;break;
+    case 'DataGridView':
+      inner.className='cw-inner w-dgv';
+      inner.innerHTML=`<div class="w-dgv-hdr"><div class="w-dgv-col">Column1</div><div class="w-dgv-col">Column2</div><div class="w-dgv-col">Column3</div></div><div class="w-dgv-row"><div class="w-dgv-cell"></div><div class="w-dgv-cell"></div><div class="w-dgv-cell"></div></div><div class="w-dgv-row"><div class="w-dgv-cell"></div><div class="w-dgv-cell"></div><div class="w-dgv-cell"></div></div>`;break;
+    case 'TreeView':
+      inner.className='cw-inner w-tv';
+      inner.style.display='block';
+      inner.innerHTML=`<div>▼ Root<div style="padding-left:14px">▶ Branch1<div style="padding-left:14px">Leaf1</div></div><div style="padding-left:14px">Branch2</div></div>`;break;
+    case 'ListView':
+      inner.className='cw-inner w-lv';
+      inner.innerHTML=`<div class="w-lv-hdr"><div class="w-lv-hc">Name</div><div class="w-lv-hc">Value</div><div class="w-lv-hc">Type</div></div>`;break;
+    case 'DateTimePicker':
+      inner.className='cw-inner w-dtp';
+      inner.innerHTML=`<span style="flex:1">${new Date().toLocaleDateString()}</span><span style="font-size:13px;margin-left:4px">📅</span>`;break;
+    case 'MenuStrip':
+      inner.className='cw-inner w-mnu';
+      inner.innerHTML=`<div class="w-mnu-it">File</div><div class="w-mnu-it">Edit</div><div class="w-mnu-it">View</div><div class="w-mnu-it">Help</div>`;break;
+    case 'StatusStrip':
+      inner.className='cw-inner w-sts';
+      inner.textContent=txt||'Ready';break;
+    default:
+      inner.style.background='#e0e0e0';inner.style.border='1px solid #aaa';
+      inner.textContent=w.type;
+  }
+}
+
+function selectWidget(id){
+  document.querySelectorAll('.cw').forEach(el=>{el.classList.remove('sel')});
+  S.sel=id;
+  if(!id){
+    document.getElementById('pNameIn').value='(Form)';
+    renderFormProps();return;
+  }
+  const el=document.getElementById(id);
+  if(el)el.classList.add('sel');
+  const w=gw(id);
+  if(w){
+    document.getElementById('pNameIn').value=w.name;
+    renderProps(w);
+    document.getElementById('stWidget').textContent=`${w.type}: ${w.name}`;
+  }
+}
+
+function gw(id){return S.widgets.find(w=>w.id===id)}
+
+function delSel(){if(S.sel)delWidget(S.sel)}
+
+function delWidget(id){
+  pushUndo();
+  const i=S.widgets.findIndex(w=>w.id===id);
+  if(i===-1)return;
+  S.widgets.splice(i,1);
+  const el=document.getElementById(id);
+  if(el)el.remove();
+  if(S.sel===id){S.sel=null;selectWidget(null)}
+  updateStatus();
+}
+
+function clearAll(){
+  if(!confirm('Clear all widgets?'))return;
+  pushUndo();
+  S.widgets.forEach(w=>{const e=document.getElementById(w.id);if(e)e.remove()});
+  S.widgets=[];S.sel=null;selectWidget(null);updateStatus();
+}
+
+// ════════════════════════════════════════
+// DRAG & DROP
+// ════════════════════════════════════════
+function onDragOver(e){
+  e.preventDefault();e.dataTransfer.dropEffect='copy';
+  const g=document.getElementById('ghost');
+  g.style.left=(e.clientX+12)+'px';g.style.top=(e.clientY+8)+'px';
+}
+
+function onDrop(e){
+  e.preventDefault();
+  const t=e.dataTransfer.getData('wt');
+  if(!t||!WD[t])return;
+  const body=document.getElementById('formBody');
+  const rect=body.getBoundingClientRect();
+  const dw=WD[t].dw||80,dh=WD[t].dh||25;
+  const x=snap(e.clientX-rect.left-dw/2);
+  const y=snap(e.clientY-rect.top-dh/2);
+  addWidget(t,Math.max(0,x),Math.max(0,y));
+  document.getElementById('ghost').style.display='none';
+}
+
+function onCanvasClick(e){
+  const t=e.target;
+  if(t===document.getElementById('vDesign')||t===document.getElementById('formCanvas')||t===document.getElementById('formBody')){
+    selectWidget(null);
+    document.getElementById('stWidget').textContent='No selection';
+  }
+  closeMenus();
+}
+
+function onBodyDown(e){
+  if(e.target===document.getElementById('formBody')||e.target===document.getElementById('formCanvas'))
+    selectWidget(null);
+}
+
+function onFCtx(e){e.preventDefault()}
+
+// ════════════════════════════════════════
+// MOVE
+// ════════════════════════════════════════
+function startMove(e,id){
+  e.stopPropagation();
+  if(e.target.classList.contains('rh'))return;
+  selectWidget(id);
+  const w=gw(id);if(!w)return;
+  S.moving={id,sx:e.clientX,sy:e.clientY,ox:w.x,oy:w.y};
+  document.addEventListener('mousemove',onMoveM);
+  document.addEventListener('mouseup',onMoveU);
+  e.preventDefault();
+}
+
+function onMoveM(e){
+  if(!S.moving)return;
+  const{id,sx,sy,ox,oy}=S.moving;
+  const w=gw(id);if(!w)return;
+  const dx=e.clientX-sx,dy=e.clientY-sy;
+  w.x=snap(Math.max(0,ox+dx));w.y=snap(Math.max(0,oy+dy));
+  const el=document.getElementById(id);
+  if(el){el.style.left=w.x+'px';el.style.top=w.y+'px'}
+  upPXY(w);
+}
+
+function onMoveU(){
+  if(S.moving){pushUndo();S.moving=null}
+  document.removeEventListener('mousemove',onMoveM);
+  document.removeEventListener('mouseup',onMoveU);
+}
+
+function upPXY(w){
+  const xi=document.getElementById('px');const yi=document.getElementById('py');
+  if(xi)xi.value=w.x;if(yi)yi.value=w.y;
+}
+
+// ════════════════════════════════════════
+// RESIZE
+// ════════════════════════════════════════
+function startResize(e,id,dir){
+  e.stopPropagation();e.preventDefault();
+  const w=gw(id);if(!w)return;
+  S.resizing={id,dir,sx:e.clientX,sy:e.clientY,ow:w.width,oh:w.height,ox:w.x,oy:w.y};
+  document.addEventListener('mousemove',onResM);
+  document.addEventListener('mouseup',onResU);
+}
+
+function onResM(e){
+  if(!S.resizing)return;
+  const{id,dir,sx,sy,ow,oh,ox,oy}=S.resizing;
+  const w=gw(id);if(!w)return;
+  const dx=e.clientX-sx,dy=e.clientY-sy;
+  if(dir.includes('e'))w.width=snap(Math.max(20,ow+dx));
+  if(dir.includes('s'))w.height=snap(Math.max(10,oh+dy));
+  if(dir.includes('w')){w.width=snap(Math.max(20,ow-dx));w.x=snap(ox+ow-w.width)}
+  if(dir.includes('n')){w.height=snap(Math.max(10,oh-dy));w.y=snap(oy+oh-w.height)}
+  const el=document.getElementById(id);
+  if(el){el.style.left=w.x+'px';el.style.top=w.y+'px';el.style.width=w.width+'px';el.style.height=w.height+'px'}
+  const wi=document.getElementById('pw');const hi=document.getElementById('ph');
+  if(wi)wi.value=w.width;if(hi)hi.value=w.height;
+  upPXY(w);
+}
+
+function onResU(){
+  if(S.resizing){pushUndo();S.resizing=null}
+  document.removeEventListener('mousemove',onResM);
+  document.removeEventListener('mouseup',onResU);
+}
+
+// ════════════════════════════════════════
+// FORM SIZE / TITLE
+// ════════════════════════════════════════
+function updateFTitle(v){
+  S.form.text=v||'Form1';
+  document.getElementById('fTitleTxt').textContent=S.form.text;
+  document.getElementById('codeFileName').textContent=(S.form.name||'Form1')+'.ps1';
+}
+
+function updateFSize(){
+  const w=parseInt(document.getElementById('fW').value)||800;
+  const h=parseInt(document.getElementById('fH').value)||500;
+  S.form.width=w;S.form.height=h;
+  const fc=document.getElementById('formCanvas');
+  fc.style.width=w+'px';fc.style.height=(h+22)+'px';
+  document.getElementById('formBody').style.height=h+'px';
+  document.getElementById('stForm').textContent=`Form: ${w}×${h}`;
+  // Resize strips
+  S.widgets.forEach(w2=>{
+    if(w2.type==='MenuStrip'||w2.type==='StatusStrip'){
+      w2.width=w;
+      if(w2.type==='StatusStrip')w2.y=Math.max(0,h-24);
+      renderWidget(w2);
+    }
+  });
+}
+
+// ════════════════════════════════════════
+// MOUSE MOVE (coords)
+// ════════════════════════════════════════
+function onMouseMove(e){
+  const body=document.getElementById('formBody');
+  if(!body)return;
+  const r=body.getBoundingClientRect();
+  const x=Math.round(e.clientX-r.left),y=Math.round(e.clientY-r.top);
+  if(x>=0&&y>=0&&x<=S.form.width&&y<=S.form.height)
+    document.getElementById('stCoords').textContent=`X:${x} Y:${y}`;
+}
+
+// ════════════════════════════════════════
+// PROPERTIES
+// ════════════════════════════════════════
+function renderFormProps(){
+  if(S.ptab==='e'){document.getElementById('pContent').innerHTML='<div style="padding:8px;color:var(--dim);font-size:13px">Select a widget to view events.</div>';return}
+  let h=`<div class="pgh">▼ Form</div>`;
+  h+=pr('Name','pfn',S.form.name,'text',v=>{S.form.name=v;document.getElementById('codeFileName').textContent=v+'.ps1'});
+  h+=pr('Text','pft',S.form.text,'text',v=>{updateFTitle(v);document.getElementById('fTitle').value=v});
+  h+=pr('Width','pfw',S.form.width,'number',v=>{document.getElementById('fW').value=v;updateFSize()});
+  h+=pr('Height','pfh',S.form.height,'number',v=>{document.getElementById('fH').value=v;updateFSize()});
+  h+=`<div class="pgh">▼ Appearance</div>`;
+  h+=prs('StartPosition','pfsp',['CenterScreen','WindowsDefaultLocation','Manual','CenterParent'],S.form.startPos,v=>S.form.startPos=v);
+  h+=prs('BackColor','pfbc',['Control','White','LightGray','LightBlue','LightGreen','LightYellow','Lavender'],S.form.backColor,v=>S.form.backColor=v);
+  document.getElementById('pContent').innerHTML=h;
+}
+
+function renderProps(w){
+  if(S.ptab==='e'){renderEvtProps(w);return}
+  let h=`<div class="pgh">▼ Design</div>`;
+  h+=pr('(Name)','pname',w.name,'text',v=>{w.name=v;document.getElementById('pNameIn').value=v;const l=document.getElementById('wl_'+w.id);if(l)l.textContent=v});
+  h+=pr('Text','ptxt',w.text||'','text',v=>{w.text=v;buildInner(w)});
+  h+=`<div class="pgh">▼ Layout</div>`;
+  h+=pr('X','px',w.x,'number',v=>{w.x=snap(parseInt(v)||0);const e=document.getElementById(w.id);if(e)e.style.left=w.x+'px'});
+  h+=pr('Y','py',w.y,'number',v=>{w.y=snap(parseInt(v)||0);const e=document.getElementById(w.id);if(e)e.style.top=w.y+'px'});
+  h+=pr('Width','pw',w.width,'number',v=>{w.width=parseInt(v)||80;const e=document.getElementById(w.id);if(e)e.style.width=w.width+'px'});
+  h+=pr('Height','ph',w.height,'number',v=>{w.height=parseInt(v)||25;const e=document.getElementById(w.id);if(e)e.style.height=w.height+'px'});
+  h+=`<div class="pgh">▼ Appearance</div>`;
+  h+=pr('Font','pfont',w.font||'Microsoft Sans Serif, 8.25','text',v=>w.font=v);
+  h+=prs('BackColor','pbc',['Control','White','LightGray','LightBlue','LightGreen','LightYellow','Black','Transparent'],w.backColor||'Control',v=>w.backColor=v);
+  h+=prs('ForeColor','pfc',['ControlText','Black','White','Red','Blue','Green','Gray','Orange'],w.foreColor||'ControlText',v=>w.foreColor=v);
+  h+=`<div class="pgh">▼ Behavior</div>`;
+  h+=prc('Enabled','pen',w.enabled!==false,v=>{w.enabled=v;const e=document.getElementById(w.id);if(e)e.style.opacity=v?1:0.4});
+  h+=prc('Visible','pvis',w.visible!==false,v=>{w.visible=v;const e=document.getElementById(w.id);if(e)e.style.opacity=v?1:0.3});
+  h+=pr('TabIndex','pti',w.tabIndex||0,'number',v=>w.tabIndex=parseInt(v)||0);
+  if(w.items!==undefined){
+    h+=`<div class="pgh">▼ Data</div>`;
+    h+=`<div class="pr" style="flex-direction:column"><div class="prl" style="width:100%;border-right:none;padding:3px 7px">Items (one per line)</div><div style="padding:3px"><textarea id="pitems" class="pinput" style="height:60px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:3px">${w.items||''}</textarea></div></div>`;
+  }
+  if(w.vmin!==undefined){
+    h+=`<div class="pgh">▼ Range</div>`;
+    h+=pr('Minimum','pvmin',w.vmin,'number',v=>{w.vmin=parseInt(v)||0;buildInner(w)});
+    h+=pr('Maximum','pvmax',w.vmax,'number',v=>{w.vmax=parseInt(v)||100;buildInner(w)});
+    h+=pr('Value','pvval',w.vval,'number',v=>{w.vval=parseInt(v)||0;buildInner(w)});
+  }
+  if(w.checked!==undefined) h+=prc('Checked','pchk',w.checked,v=>{w.checked=v;buildInner(w)});
+  document.getElementById('pContent').innerHTML=h;
+  const pit=document.getElementById('pitems');
+  if(pit)pit.addEventListener('input',e=>{w.items=e.target.value;buildInner(w)});
+}
+
+function renderEvtProps(w){
+  const evs=WD[w.type]?.evs||[];
+  let h=`<div style="padding:4px 8px;font-size:13px;color:#ffd700;border-bottom:1px solid var(--border)">⚡ Dbl-click to edit event handler in Code tab</div>`;
+  evs.forEach(ev=>{
+    const code=w.eventCode[ev]||'';
+    h+=`<div class="er"><div class="erl" title="${ev}">${ev}</div><div class="erv"><input class="einput" value="${code?'✓ '+w.name+'_'+ev:''}" placeholder="(none)" readonly title="Double-click to add ${ev} handler" ondblclick="openEvt('${w.id}','${ev}')"></div></div>`;
+  });
+  if(!evs.length)h+=`<div style="padding:8px;color:var(--dim);font-size:13px">No events for ${w.type}.</div>`;
+  document.getElementById('pContent').innerHTML=h;
+}
+
+function pr(lbl,id,val,type,fn){
+  const rid='pr_'+id;
+  PH[rid]=fn;
+  return `<div class="pr"><div class="prl" title="${lbl}">${lbl}</div><div class="prv"><input class="pinput" id="${id}" type="${type}" value="${val}" onchange="opc('${rid}',this.value)"></div></div>`;
+}
+
+function prc(lbl,id,val,fn){
+  const rid='pr_'+id;PH[rid]=fn;
+  return `<div class="pr"><div class="prl" title="${lbl}">${lbl}</div><div class="prv" style="padding:3px 6px"><input type="checkbox" class="pchk" id="${id}" ${val?'checked':''} onchange="opcc('${rid}',this.checked)"></div></div>`;
+}
+
+function prs(lbl,id,opts,val,fn){
+  const rid='pr_'+id;PH[rid]=fn;
+  const os=opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('');
+  return `<div class="pr"><div class="prl" title="${lbl}">${lbl}</div><div class="prv"><select class="psel" id="${id}" onchange="opc('${rid}',this.value)">${os}</select></div></div>`;
+}
+
+function switchPTab(t){
+  S.ptab=t;
+  document.querySelectorAll('.ptab').forEach(e=>e.classList.remove('act'));
+  document.getElementById('ptab-'+t).classList.add('act');
+  const w=S.sel?gw(S.sel):null;
+  if(w)renderProps(w);else renderFormProps();
+}
+
+// ════════════════════════════════════════
+// EVENT HANDLER EDITOR
+// ════════════════════════════════════════
+function openEvt(id,evt){
+  const w=gw(id);if(!w)return;
+  const evs=WD[w.type]?.evs||[];
+  const targetEvt=evt||evs[0];
+  if(!targetEvt)return;
+  if(!w.eventCode[targetEvt]){
+    w.eventCode[targetEvt]=`    # ${w.name}_${targetEvt} event handler\n    Write-Host "${w.name} ${targetEvt} fired"`;
+    addOut(`Created handler stub for ${w.name}.${targetEvt}`,'i');
+  }
+  genCode();switchTab('code');
+  const ta=document.getElementById('codeTA');
+  const search=`$${w.name}.Add_${targetEvt}(`;
+  const idx=ta.value.indexOf(search);
+  if(idx!==-1){
+    ta.focus();
+    const linesBefore=ta.value.substring(0,idx).split('\n').length-1;
+    ta.scrollTop=linesBefore*18;
+    ta.setSelectionRange(idx,idx+search.length);
+  }
+  addOut(`Jumped to ${w.name}.${targetEvt} handler in code`,'s');
+}
+
+// ════════════════════════════════════════
+// CODE GENERATION
+// ════════════════════════════════════════
+function genCode(){
+  const f=S.form;
+  let c='';
+  c+=`# ${'='.repeat(60)}\n`;
+  c+=`# PowerShell Windows Forms Application\n`;
+  c+=`# Form: ${f.text}  |  Generated by PowerShell GUI IDE\n`;
+  c+=`# ${'='.repeat(60)}\n\n`;
+  c+=`Add-Type -AssemblyName System.Windows.Forms\n`;
+  c+=`Add-Type -AssemblyName System.Drawing\n\n`;
+  c+=`[System.Windows.Forms.Application]::EnableVisualStyles()\n\n`;
+  c+=`# ${'─'.repeat(50)}\n# Form Setup\n# ${'─'.repeat(50)}\n`;
+  c+=`$${f.name} = New-Object System.Windows.Forms.Form\n`;
+  c+=`$${f.name}.Text          = "${f.text}"\n`;
+  c+=`$${f.name}.Size          = New-Object System.Drawing.Size(${f.width}, ${f.height})\n`;
+  c+=`$${f.name}.StartPosition = [System.Windows.Forms.FormStartPosition]::${f.startPos||'CenterScreen'}\n`;
+  if(f.backColor&&f.backColor!=='Control')
+    c+=`$${f.name}.BackColor     = [System.Drawing.Color]::${f.backColor}\n`;
+  c+=`$${f.name}.Font          = New-Object System.Drawing.Font("Segoe UI", 9)\n\n`;
+
+  S.widgets.forEach(w=>{
+    const d=WD[w.type];
+    c+=`# ${'─'.repeat(50)}\n# ${w.name} (${w.type})\n# ${'─'.repeat(50)}\n`;
+    c+=`$${w.name} = New-Object ${d.ps}\n`;
+    if(w.text!==undefined&&w.type!=='PictureBox'&&w.type!=='Panel')
+      c+=`$${w.name}.Text     = "${w.text}"\n`;
+    if(w.type==='MenuStrip')
+      c+=`$${w.name}.Dock     = [System.Windows.Forms.DockStyle]::Top\n`;
+    else if(w.type==='StatusStrip')
+      c+=`$${w.name}.Dock     = [System.Windows.Forms.DockStyle]::Bottom\n`;
+    else{
+      c+=`$${w.name}.Location = New-Object System.Drawing.Point(${w.x}, ${w.y})\n`;
+      c+=`$${w.name}.Size     = New-Object System.Drawing.Size(${w.width}, ${w.height})\n`;
+    }
+    if(w.enabled===false) c+=`$${w.name}.Enabled  = $false\n`;
+    if(w.visible===false) c+=`$${w.name}.Visible  = $false\n`;
+    if(w.tabIndex!==undefined) c+=`$${w.name}.TabIndex = ${w.tabIndex}\n`;
+    if(w.checked) c+=`$${w.name}.Checked  = $true\n`;
+    if(w.vmin!==undefined){
+      c+=`$${w.name}.Minimum  = ${w.vmin}\n`;
+      c+=`$${w.name}.Maximum  = ${w.vmax}\n`;
+      c+=`$${w.name}.Value    = ${w.vval}\n`;
+    }
+    if(w.items){
+      w.items.split('\n').filter(Boolean).forEach(it=>{
+        if(w.type==='ComboBox'||w.type==='ListBox')
+          c+=`[void]$${w.name}.Items.Add("${it.trim()}")\n`;
+      });
+    }
+    if(w.font&&w.font!=='Microsoft Sans Serif, 8.25'){
+      const fp=w.font.split(',');
+      c+=`$${w.name}.Font     = New-Object System.Drawing.Font("${fp[0].trim()}", ${(fp[1]||'8.25').trim()})\n`;
+    }
+    if(w.backColor&&w.backColor!=='Control'&&w.backColor!=='Transparent')
+      c+=`$${w.name}.BackColor = [System.Drawing.Color]::${w.backColor}\n`;
+    if(w.foreColor&&w.foreColor!=='ControlText')
+      c+=`$${w.name}.ForeColor = [System.Drawing.Color]::${w.foreColor}\n`;
+    c+='\n';
+    // Event handlers
+    const evs=d.evs||[];
+    evs.forEach(ev=>{
+      const code=w.eventCode[ev];
+      c+=`$${w.name}.Add_${ev}({\n`;
+      if(code&&code.trim()){
+        c+=code.split('\n').map(l=>(l.startsWith('    ')?l:'    '+l)).join('\n')+'\n';
+      }else{
+        c+=`    # TODO: ${w.name} ${ev} handler\n`;
+      }
+      c+=`})\n`;
+    });
+    c+='\n';
+  });
+
+  c+=`# ${'─'.repeat(50)}\n# Add Controls to Form\n# ${'─'.repeat(50)}\n`;
+  S.widgets.forEach(w=>{c+=`$${f.name}.Controls.Add($${w.name})\n`});
+  const ms=S.widgets.find(w=>w.type==='MenuStrip');
+  if(ms)c+=`$${f.name}.MainMenuStrip = $${ms.name}\n`;
+  c+=`\n# ${'─'.repeat(50)}\n# Launch\n# ${'─'.repeat(50)}\n`;
+  c+=`[void]$${f.name}.ShowDialog()\n`;
+
+  document.getElementById('codeTA').value=c;
+  syncLines();
+  return c;
+}
+
+function syncLines(){
+  const ta=document.getElementById('codeTA');
+  const n=ta.value.split('\n').length;
+  const ln=document.getElementById('lineNums');
+  ln.innerHTML=Array.from({length:n},(_,i)=>i+1).join('<br>');
+  ln.scrollTop=ta.scrollTop;
+}
+
+// ════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════
+function switchTab(t){
+  S.tab=t;
+  ['design','code','output'].forEach(id=>{
+    const v=document.getElementById('v'+id.charAt(0).toUpperCase()+id.slice(1));
+    v.style.display=id===t?'flex':'none';
+    document.getElementById('tab-'+id).classList.toggle('act',id===t);
+  });
+  if(t==='code')genCode();
+}
+
+// ════════════════════════════════════════
+// EXPORT
+// ════════════════════════════════════════
+function exportPS1(){
+  const code=genCode();
+  const blob=new Blob([code],{type:'text/plain'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=(S.form.name||'Form1')+'.ps1';a.click();
+  URL.revokeObjectURL(url);
+  addOut(`✅ Exported ${S.form.name}.ps1 (${code.length} chars, ${S.widgets.length} widgets)`,'s');
+  switchTab('output');
+}
+
+function showExeDlg(){
+  const fn=S.form.name||'Form1';
+  showDlg('Build .EXE — Compile PowerShell to Executable',`
+<p style="margin-bottom:8px">PowerShell WinForms scripts can be compiled to standalone <strong>.exe</strong> files using <strong>PS2EXE</strong> (open-source). No .NET SDK needed — runs entirely in PowerShell.</p>
+<p><strong>Step 1 — Install PS2EXE module:</strong></p>
+<div class="dlg-code">Install-Module ps2exe -Scope CurrentUser -Force</div>
+<p><strong>Step 2 — Export your .PS1 (click button below), then compile:</strong></p>
+<div class="dlg-code">Invoke-ps2exe \`
+    -InputFile  "${fn}.ps1" \`
+    -OutputFile "${fn}.exe" \`
+    -NoConsole \`
+    -Title      "${S.form.text}" \`
+    -Description "Built with PowerShell GUI IDE" \`
+    -IconFile   "app.ico" \`
+    -RequireAdmin</div>
+<p><strong>Quick one-liner (fetch + compile in one step):</strong></p>
+<div class="dlg-code">irm https://ps2exe.me | iex; Invoke-ps2exe ${fn}.ps1 ${fn}.exe -NoConsole</div>
+<p style="color:#dcdcaa;margin-top:8px">💡 Flags: <code>-NoConsole</code> hides the console window &nbsp;|&nbsp; <code>-RequireAdmin</code> for UAC elevation &nbsp;|&nbsp; <code>-x64</code> for 64-bit only &nbsp;|&nbsp; <code>-MTA</code> for multi-thread</p>
+`,[
+    {lbl:'⬇ Export PS1 Now',prim:true,fn:()=>{closeDlg();exportPS1()}},
+    {lbl:'× Close',fn:closeDlg}
+  ]);
+}
+
+// ════════════════════════════════════════
+// CONTEXT MENU
+// ════════════════════════════════════════
+function showCtx(x,y){
+  const m=document.getElementById('ctx');
+  m.style.left=x+'px';m.style.top=y+'px';m.style.display='block';
+}
+function hideCtx(){document.getElementById('ctx').style.display='none'}
+
+function ca(action){
+  hideCtx();
+  switch(action){
+    case 'del':delSel();break;
+    case 'cut':
+      if(S.sel){const w=gw(S.sel);S.clip={...w,eventCode:{...w.eventCode}};delWidget(S.sel)}break;
+    case 'copy':
+      if(S.sel){const w=gw(S.sel);S.clip={...w,eventCode:{...w.eventCode}}}break;
+    case 'paste':
+      if(S.clip){
+        const nw={...S.clip,id:'w_'+Date.now(),x:S.clip.x+16,y:S.clip.y+16,name:genName(S.clip.type),eventCode:{...S.clip.eventCode}};
+        pushUndo();S.widgets.push(nw);renderWidget(nw);selectWidget(nw.id);updateStatus();
+      }break;
+    case 'code':if(S.sel)openEvt(S.sel,null);break;
+    case 'front':{const e=document.getElementById(S.sel);if(e)e.style.zIndex=(parseInt(e.style.zIndex)||0)+1}break;
+    case 'back':{const e=document.getElementById(S.sel);if(e)e.style.zIndex=Math.max(0,(parseInt(e.style.zIndex)||1)-1)}break;
+  }
+}
+
+// ════════════════════════════════════════
+// MENUS
+// ════════════════════════════════════════
+function tmenu(el,id){
+  const wasOpen=el.classList.contains('open');
+  closeMenus();
+  if(!wasOpen)el.classList.add('open');
+}
+function closeMenus(){document.querySelectorAll('.mi').forEach(m=>m.classList.remove('open'))}
+
+function ma(action){
+  closeMenus();
+  switch(action){
+    case 'new':
+      if(confirm('New project? Unsaved changes will be lost.')){
+        clearAll();
+        S.form={name:'Form1',text:'Form1',width:800,height:500,backColor:'Control',startPos:'CenterScreen'};
+        updateFTitle('Form1');document.getElementById('fTitle').value='Form1';
+        document.getElementById('fW').value=800;document.getElementById('fH').value=500;
+        updateFSize();selectWidget(null);addOut('New project created','i');
+      }break;
+    case 'ps1':exportPS1();break;
+    case 'exe':showExeDlg();break;
+    case 'grid':S.grid=!S.grid;addOut(`Grid snap: ${S.grid?'ON':'OFF'}`,'i');break;
+  }
+}
+
+// ════════════════════════════════════════
+// DIALOG
+// ════════════════════════════════════════
+function showDlg(title,body,actions){
+  document.getElementById('dlgTtl').textContent=title;
+  document.getElementById('dlgBody').innerHTML=body;
+  const acts=document.getElementById('dlgActs');acts.innerHTML='';
+  (actions||[{lbl:'Close',fn:closeDlg}]).forEach((a,i)=>{
+    const btn=document.createElement('button');
+    btn.className='dlg-btn'+(a.prim?' prim':'');
+    btn.textContent=a.lbl;btn.onclick=a.fn;acts.appendChild(btn);
+  });
+  document.getElementById('dlgOv').classList.add('show');
+}
+function closeDlg(){document.getElementById('dlgOv').classList.remove('show')}
+
+function showAbout(){
+  showDlg('PowerShell GUI IDE v1.0',`
+<p style="margin-bottom:12px"><strong>A Visual Studio–style IDE for PowerShell WinForms development.</strong></p>
+<p>🎨 Drag-and-drop visual designer with 20+ WinForms controls</p>
+<p>📐 Resize handles, grid snap, select/move/resize</p>
+<p>⚡ Event handler editor — double-click a widget to jump to its handler</p>
+<p>📝 Live PowerShell code generation with syntax-ready output</p>
+<p>⬇ Export as .PS1 or compile to standalone .EXE via PS2EXE</p>
+<p>↩ Undo / Redo / Copy / Paste / Context menu</p>
+<br><p style="color:var(--dim)">Built for GM Insider Threat — Dongmin Yu</p>
+`,[{lbl:'Close',fn:closeDlg}]);
+}
+
+function showKeys(){
+  showDlg('Keyboard Shortcuts',`
+<div style="display:grid;grid-template-columns:130px 1fr;gap:4px 12px;font-size:12px">
+<span style="color:#ffd700">Del / Backspace</span><span>Delete selected widget</span>
+<span style="color:#ffd700">Ctrl+Z</span><span>Undo</span>
+<span style="color:#ffd700">Ctrl+Y</span><span>Redo</span>
+<span style="color:#ffd700">Ctrl+S</span><span>Export .PS1</span>
+<span style="color:#ffd700">F5</span><span>Regenerate code</span>
+<span style="color:#ffd700">F7</span><span>Switch to Code tab</span>
+<span style="color:#ffd700">Ctrl+C / X / V</span><span>Copy / Cut / Paste widget</span>
+<span style="color:#ffd700">Esc</span><span>Deselect / Close menu</span>
+<span style="color:#ffd700">Dbl-click (toolbox)</span><span>Add widget at canvas center</span>
+<span style="color:#ffd700">Dbl-click (canvas)</span><span>Jump to default event handler</span>
+<span style="color:#ffd700">Right-click</span><span>Context menu</span>
+<span style="color:#ffd700">Drag (toolbox → canvas)</span><span>Place widget</span>
+<span style="color:#ffd700">Drag (widget)</span><span>Move widget</span>
+<span style="color:#ffd700">Drag (corner handle)</span><span>Resize widget</span>
+</div>`,[{lbl:'Close',fn:closeDlg}]);
+}
+
+// ════════════════════════════════════════
+// UNDO / REDO
+// ════════════════════════════════════════
+function snapState(){
+  return JSON.stringify({
+    widgets:S.widgets.map(w=>({...w,eventCode:{...w.eventCode}})),
+    form:{...S.form}
+  });
+}
+
+function pushUndo(){
+  S.undo.push(snapState());
+  if(S.undo.length>40)S.undo.shift();
+  S.redo=[];
+}
+
+function restoreState(snap){
+  const d=JSON.parse(snap);
+  document.getElementById('formBody').innerHTML='';
+  S.widgets=d.widgets;S.form=d.form;S.sel=null;
+  S.widgets.forEach(w=>renderWidget(w));
+  updateFTitle(S.form.text);
+  document.getElementById('fTitle').value=S.form.text;
+  document.getElementById('fW').value=S.form.width;
+  document.getElementById('fH').value=S.form.height;
+  updateFSize();selectWidget(null);updateStatus();
+}
+
+function doUndo(){
+  if(!S.undo.length)return;
+  S.redo.push(snapState());
+  restoreState(S.undo.pop());
+  addOut('Undo','i');
+}
+
+function doRedo(){
+  if(!S.redo.length)return;
+  S.undo.push(snapState());
+  restoreState(S.redo.pop());
+  addOut('Redo','i');
+}
+
+// ════════════════════════════════════════
+// STATUS & OUTPUT
+// ════════════════════════════════════════
+function updateStatus(){
+  document.getElementById('stCount').textContent=`Widgets: ${S.widgets.length}`;
+}
+
+function addOut(msg,type='i'){
+  const el=document.getElementById('outLines');
+  const d=document.createElement('div');
+  d.className='ol o'+type;
+  const t=new Date().toLocaleTimeString();
+  d.textContent=`[${t}] ${msg}`;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+  if(S.tab!=='output')document.getElementById('stWidget').textContent=msg.slice(0,40)+'…';
+}
+
+// ════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  const inInput=e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT';
+  if(e.key==='Escape'){selectWidget(null);closeMenus();closeDlg();hideCtx();return}
+  if(e.key==='Delete'&&!inInput){e.preventDefault();delSel()}
+  if(e.ctrlKey&&e.key==='z'&&!inInput){e.preventDefault();doUndo()}
+  if(e.ctrlKey&&e.key==='y'&&!inInput){e.preventDefault();doRedo()}
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();exportPS1()}
+  if(e.ctrlKey&&e.key==='c'&&!inInput){if(S.sel){const w=gw(S.sel);S.clip={...w,eventCode:{...w.eventCode}}}}
+  if(e.ctrlKey&&e.key==='x'&&!inInput){ca('cut')}
+  if(e.ctrlKey&&e.key==='v'&&!inInput){ca('paste')}
+  if(e.key==='F7'){e.preventDefault();switchTab('code')}
+  if(e.key==='F5'){e.preventDefault();genCode();addOut('Code regenerated','s')}
+  if(e.shiftKey&&e.key==='F7'){e.preventDefault();switchTab('design')}
+});
+
+document.addEventListener('click',()=>{hideCtx();closeMenus()});
+document.addEventListener('contextmenu',e=>{
+  if(!e.target.closest('.cw'))e.preventDefault();
+});
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+function init(){
+  buildToolbox();
+  updateFSize();
+  renderFormProps();
+  genCode();
+
+  addOut('🚀 PowerShell GUI IDE loaded. Drag widgets from the Toolbox to the form canvas.','s');
+  addOut('💡 Tip: Double-click a widget on the canvas to jump to its event handler.','i');
+  addOut('💡 Tip: Right-click any widget for Cut/Copy/Paste/Delete/Code options.','i');
+
+  // Starter example form
+  setTimeout(()=>{
+    const lbl=addWidget('Label',12,12);
+    lbl.text='My PowerShell App';lbl.font='Segoe UI, 12';lbl.width=220;lbl.height=24;
+    buildInner(lbl);
+
+    const tb=addWidget('TextBox',12,50);
+    tb.width=260;tb.text='';
+    buildInner(tb);
+
+    const btn=addWidget('Button',12,90);
+    btn.text='Click Me';btn.width=100;
+    btn.eventCode['Click']=`    $msg = $textBox1.Text
+    if($msg -eq ""){$msg = "Hello, World!"}
+    [System.Windows.Forms.MessageBox]::Show($msg, "Info",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information)`;
+    buildInner(btn);
+
+    const cb=addWidget('CheckBox',12,130);
+    cb.text='Enable Feature';buildInner(cb);
+
+    const prg=addWidget('ProgressBar',12,165);
+    prg.width=260;prg.vval=65;buildInner(prg);
+
+    const lbl2=addWidget('Label',12,210);
+    lbl2.text='Select Option:';lbl2.width=120;lbl2.height=55;buildInner(lbl2);
+
+    const cmb=addWidget('ComboBox',118,197);
+    cmb.width=154;buildInner(cmb);
+
+    selectWidget(null);genCode();updateStatus();
+    addOut('✨ Starter form loaded — Label, TextBox, Button, CheckBox, ProgressBar, ComboBox.','s');
+  },80);
+}
+
+// PDF export hook
+try{
+  window.GleanBridge.postMessage({actionId:'export-pdf',type:'glean-add-menu',metadata:{label:'Export as PDF',icon:'export'}});
+  window.GleanBridge.onMessage('action',d=>{if(d.actionId==='export-pdf')window.print()});
+}catch(e){}
+
+init();
+</script>
+</body>
+</html>
